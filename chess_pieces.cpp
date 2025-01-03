@@ -4,6 +4,13 @@
 #include <vector>
 using namespace std;
 
+class King;
+class Queen;
+class Bishop;
+class Knight;
+class Rook;
+class Pawn;
+
 enum pieceType { KING, QUEEN, ROOK, BISHOP, KNIGHT, PAWN };
 enum pieceSide { WHITE, BLACK };
 
@@ -38,9 +45,9 @@ protected:
     }
 
 public:
-    Piece(unordered_map<pair<char, char>, Piece*>& board, Piece& king, int value, pair<char, char> location, pieceType type, pieceSide color)
-        : board(&board), king(&king), value(value), location(location), type(type), color(color) {
-        (*board)[location] = this; // Add piece to the board
+    Piece(unordered_map<pair<char, char>, Piece*>& board, Piece* king, int value, pair<char, char> location, pieceType type, pieceSide color)
+        : board(&board), king(king), value(value), location(location), type(type), color(color) {
+        board[location] = this; // Add piece to the board
     }
 
     virtual ~Piece() {
@@ -73,8 +80,52 @@ public:
         return location;
     }
 
-    void setLocation(pair<char, char> loc) const {
+    void setLocation(pair<char, char> loc) {
         location = loc; 
+    }
+};
+
+class Rook: public Piece {
+private:
+    bool has_moved = false;
+
+public: 
+    Rook(unordered_map<pair<char, char>, Piece*>& board, Piece* king, pieceSide color, pair<char, char> location) 
+        : Piece(board, king, 5, location, ROOK, color) {}
+    
+    vector<pair<char, char>> validMoves(const bool danger[8][8]) override {
+        vector<pair<char, char>> moves;
+        char curr_file = location.first;
+        char curr_rank = location.second;
+
+        // Check moves to right
+        for (char file = curr_file + 1; file <= 'h'; file++) {
+            if (checkPosition(moves, file, curr_rank)) break;
+        }
+        // Check moves to left
+        for (char file = curr_file-1; file >= 'a'; file--) {
+            if (checkPosition(moves, file, curr_rank)) break;
+        }
+        // Check moves up
+        for (int rank = curr_rank+1; rank <= 8; rank++) {
+            if (checkPosition(moves, curr_file, rank)) break;
+        }
+        // Check moves down
+        for (int rank = curr_rank-1; rank >= 1; rank--) {
+            if (checkPosition(moves, curr_file, rank)) break;
+        }
+
+        return moves;
+    }
+
+    void makeMove(pair<char, char> move) override{
+        moveHelper(move);
+
+        if (!has_moved) has_moved = true; 
+    }
+
+    bool hasMoved() {
+        return has_moved;
     }
 };
 
@@ -88,7 +139,7 @@ private:
         auto rook_pos = make_pair(file, rank);
         if (board->count(rook_pos)) {
             Piece* piece = (*board)[rook_pos];
-            return piece->getType() == ROOK && !static_cast<Rook*>piece->hasMoved();
+            return piece->getType() == ROOK && !static_cast<Rook*>(piece)->hasMoved();
         }
         return false;
     }
@@ -130,7 +181,7 @@ private:
 
 public: 
     King(unordered_map<pair<char, char>, Piece*>& board, pieceSide color) 
-        : Piece(board, this, 0, color == WHITE ? make_pair('d', 1) : make_pair('e', 8), KING, color) {}
+        : Piece(board, this, 0, color == WHITE ? make_pair('e', 1) : make_pair('e', 8), KING, color) {}
 
     King(unordered_map<pair<char, char>, Piece*>& board, pieceSide color, pair<char, char> location) 
         : Piece(board, this, 0, location, KING, color) {}
@@ -152,14 +203,14 @@ public:
                 // Check if move is valid (not in danger, not blocked by same-side piece)
                 if (!danger[file - 'a'][rank - 1] && (!board->count(pos) ||
                     (*board)[pos]->getColor() != color)) {
-                    moves.push_back(file, rank);
+                    moves.push_back(pos);
                 }
             }
         }
 
         auto [left, right] = canCastle(danger);
-        if (left) moves.emplace_back('c', curr_rank);
-        if (right) moves.emplace_back('g', curr_rank);
+        if (left) moves.emplace_back(make_pair('c', curr_rank));
+        if (right) moves.emplace_back(make_pair('g', curr_rank));
 
         return moves;
     }
@@ -195,57 +246,12 @@ public:
 };
 
 
-class Rook: public Piece {
-private:
-    bool has_moved = false;
-
-public: 
-    Rook(unordered_map<pair<char, char>, Piece*>& board, Piece& king, pieceSide color, pair<char, char> location) 
-        : Piece(board, king, 5, location, ROOK, color) {}
-    
-    vector<pair<char, char>> validMoves() override {
-        vector<pair<char, char>> moves;
-        char curr_file = location.first;
-        char curr_rank = location.second;
-
-        // Check moves to right
-        for (char file = curr_file + 1; file <= 'h'; file++) {
-            if (checkPosition(moves, file, curr_rank)) break;
-        }
-        // Check moves to left
-        for (char file = curr_file-1; file >= 'a'; file--) {
-            if (checkPosition(moves, file, curr_rank)) break;
-        }
-        // Check moves up
-        for (int rank = curr_rank+1; rank <= 8; rank++) {
-            if (checkPosition(moves, curr_file, rank)) break;
-        }
-        // Check moves down
-        for (int rank = curr_rank-1; rank >= 1; rank--) {
-            if (checkPosition(moves, curr_file, rank)) break;
-        }
-
-        return moves;
-    }
-
-    void makeMove(pair<char, char> move) override{
-        moveHelper(move);
-
-        if (!has_moved) has_moved = true; 
-    }
-
-    bool hasMoved() {
-        return has_moved;
-    }
-};
-
-
 class Bishop: public Piece {
 public: 
-    Bishop(unordered_map<pair<char, char>, Piece*>& board, Piece& king, pieceSide color, pair<char, char> location) 
+    Bishop(unordered_map<pair<char, char>, Piece*>& board, Piece* king, pieceSide color, pair<char, char> location) 
         : Piece(board, king, 3, location, BISHOP, color) {}
     
-    vector<pair<char, char>> validMoves() override {
+    vector<pair<char, char>> validMoves(const bool danger[8][8]) override {
         vector<pair<char, char>> moves;
         char curr_file = location.first;
         char curr_rank = location.second;
@@ -269,12 +275,6 @@ public:
 
         return moves;
     }
-
-    void makeMove(pair<char, char> move) override{
-        moveHelper(move);
-
-        if (!has_moved) has_moved = true; 
-    }
 };
 
 
@@ -282,17 +282,17 @@ class Pawn: public Piece {
 private:
     bool has_moved = false;
     pair<char, char> en_passant;
-    Piece& en_pawn;
+    Pawn* en_pawn = nullptr;
     char direction;
 
 public: 
-    Pawn(unordered_map<pair<char, char>, Piece*>& board, Piece& king, pieceSide color, pair<char, char> location) 
+    Pawn(unordered_map<pair<char, char>, Piece*>& board, Piece* king, pieceSide color, pair<char, char> location) 
         : Piece(board, king, 1, location, PAWN, color) {
             if (color == BLACK) direction = 0;
             else direction = 2;
         }
     
-    vector<pair<char, char>> validMoves() override {
+    vector<pair<char, char>> validMoves(const bool danger[8][8]) override {
         vector<pair<char, char>> moves;
         char curr_file = location.first;
         char curr_rank = location.second;
@@ -308,10 +308,15 @@ public:
             }
         }
 
-        pair<char, char> left = make_pair(move.first-1, move.second+p);
-        pair<char, char> right = make_pair(move.first+1, move.second+p);
+        pair<char, char> left = make_pair(location.first-1, location.second+p);
+        pair<char, char> right = make_pair(location.first+1, location.second+p);
         if (board->count(left) != 0 && (*board)[left]->getColor() != color) moves.push_back(left);
         if (board->count(right) != 0 && (*board)[right]->getColor() != color) moves.push_back(right);
+
+        // Put in en passant here
+        // ********************************************
+        // ********************************************
+        // ********************************************
 
         return moves;
     }
@@ -327,8 +332,19 @@ public:
         if ((int)location.second-(int)move.second == 2) {
             pair<char, char> left = make_pair(move.first-1, move.second);
             pair<char, char> right = make_pair(move.first+1, move.second);
-            if (board->count(left) != 0 && (*board)[left]->getType() == PAWN && (*board)[left]->getColor() != color) (*board)[pos]->setEnPassant(make_pair(move.first, move.second-(-1*((int)direction-1))), this);
-            if (board->count(right) != 0 && (*board)[right]->getType() == PAWN && (*board)[right]->getColor() != color) (*board)[pos]->setEnPassant(make_pair(move.first, move.second-(-1*((int)direction-1))), this);
+            if (board->count(left) != 0 && (*board)[left]->getType() == PAWN && (*board)[left]->getColor() != color) {
+                Pawn* leftPawn = dynamic_cast<Pawn*>((*board)[left]);
+                if (leftPawn) {
+                    leftPawn->setEnPassant(make_pair(move.first, move.second - (-1 * ((int)direction - 1))), leftPawn);
+                }
+            }
+
+            if (board->count(right) != 0 && (*board)[right]->getType() == PAWN && (*board)[right]->getColor() != color) {
+                Pawn* rightPawn = dynamic_cast<Pawn*>((*board)[right]);
+                if (rightPawn) {
+                    rightPawn->setEnPassant(make_pair(move.first, move.second - (-1 * ((int)direction - 1))), rightPawn);
+                }
+            }
         }
 
         // Make move
@@ -336,7 +352,7 @@ public:
         if (!has_moved) has_moved = true; 
     }
 
-    void setEnPassant(pair<char, char> spot, Piece& pawn) {
+    void setEnPassant(pair<char, char> spot, Pawn* pawn) {
         en_pawn = pawn;
         en_passant = spot;
     }
@@ -345,14 +361,14 @@ public:
 
 class Knight: public Piece {
 public: 
-    Knight(unordered_map<pair<char, char>, Piece*>& board, Piece& king, pieceSide color, pair<char, char> location) 
+    Knight(unordered_map<pair<char, char>, Piece*>& board, Piece* king, pieceSide color, pair<char, char> location) 
         : Piece(board, king, 3, location, KNIGHT, color) {}
 
     vector<pair<char, char>> validMoves(const bool danger[8][8]) override {
         vector<pair<char, char>> moves;
         char curr_file = location.first;
         char curr_rank = location.second;
-
+        
         const int directions[8][2] = {{2, -1}, {2, 1}, {1, 2}, {1, -2}, {-1, 2}, {-1, -2}, {-2, -1}, {-2, 1}};
         
         for (const auto& dir : directions) {
@@ -364,7 +380,7 @@ public:
                 if (!danger[file - 'a'][rank - 1] && 
                     (!board->count(pos) ||
                     (*board)[pos]->getColor() != color)) {
-                    moves.push_back(file, rank);
+                    moves.push_back(make_pair(file, rank));
                 }
             }
         }
@@ -375,10 +391,10 @@ public:
 
 class Queen: public Piece {
 public: 
-    QUEEN(unordered_map<pair<char, char>, Piece*>& board, Piece& king, pieceSide color, pair<char, char> location) 
+    Queen(unordered_map<pair<char, char>, Piece*>& board, Piece* king, pieceSide color, pair<char, char> location) 
         : Piece(board, king, 9, location, QUEEN, color) {}
     
-    vector<pair<char, char>> validMoves() override {
+    vector<pair<char, char>> validMoves(const bool danger[8][8]) override {
         vector<pair<char, char>> moves;
         char curr_file = location.first;
         char curr_rank = location.second;
