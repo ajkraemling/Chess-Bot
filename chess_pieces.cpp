@@ -18,7 +18,7 @@ protected:
 
     bool checkPosition(vector<pair<char, char>>& moves, char file, int rank) {
         auto pos = make_pair(file, rank);
-        if (board->count(pos) == 0 ) {
+        if (board->count(pos) == 0) {
             moves.push_back(pos);
             return true;
         } else if ((*board)[pos]->getColor() != color) {
@@ -26,6 +26,15 @@ protected:
             return true;
         }
         return false;
+    }
+
+    void moveHelper(pair<char, char> move) {
+        if (board) {
+            if (board->count(move)) (*board)[move]->setLocation(make_pair('z', 'z'));
+            (*board)[move] = (*board)[location];
+            (*board).erase(location);
+            location = move;
+        }
     }
 
 public:
@@ -46,11 +55,7 @@ public:
 
     // Move piece to a new location
     virtual void makeMove(pair<char, char> move) {
-        if (board) {
-            (*board)[move] = (*board)[location];
-            (*board).erase(location);
-            location = move;
-        }
+        moveHelper(move);
     }
 
     // Get the type of the piece
@@ -66,6 +71,10 @@ public:
     // Get the current location of the piece
     pair<char, char> getLocation() const {
         return location;
+    }
+
+    void setLocation(pair<char, char> loc) const {
+        location = loc; 
     }
 };
 
@@ -170,8 +179,7 @@ public:
         }
 
         // Perform move
-        board[move] = board[location];
-        board[location] = nullptr;
+        moveHelper(move);
 
         has_moved = true; 
         can_castle = false;
@@ -221,11 +229,7 @@ public:
     }
 
     void makeMove(pair<char, char> move) override{
-        if (board) {
-            (*board)[move] = (*board)[location];
-            (*board).erase(location);
-            location = move;
-        }
+        moveHelper(move);
 
         if (!has_moved) has_moved = true; 
     }
@@ -267,11 +271,7 @@ public:
     }
 
     void makeMove(pair<char, char> move) override{
-        if (board) {
-            (*board)[move] = (*board)[location];
-            (*board).erase(location);
-            location = move;
-        }
+        moveHelper(move);
 
         if (!has_moved) has_moved = true; 
     }
@@ -285,16 +285,6 @@ private:
     Piece& en_pawn;
     char direction;
 
-    bool checkPosition(char file, int rank) {
-        auto pos = make_pair(file, rank);
-        if (board->count(pos) == 0 ) {
-            return true;
-        } else if ((*board)[pos]->getColor() != color) {
-            return true;
-        }
-        return false;
-    }
-
 public: 
     Pawn(unordered_map<pair<char, char>, Piece*>& board, Piece& king, pieceSide color, pair<char, char> location) 
         : Piece(board, king, 1, location, PAWN, color) {
@@ -306,15 +296,22 @@ public:
         vector<pair<char, char>> moves;
         char curr_file = location.first;
         char curr_rank = location.second;
+        int p =(int)direction-1;
 
-        if (!has_moved) {
-            if (checkPosition(curr_file, curr_rank + direction-1)) {
-                pair<char, char> check = make_pair(curr_file, curr_rank + 2*(direction-1));
-                if (checkPosition(check.first, check.second)) {
-                    validMoves.push_back(check);
+        if (checkPosition(moves, curr_file, curr_rank + p)) {
+            // Check for double move
+            if (!has_moved) {
+                pair<char, char> check = make_pair(curr_file, curr_rank + 2*p);
+                if (checkPosition(moves, check.first, check.second)) {
+                    moves.push_back(check);
                 }
             }
-        }    
+        }
+
+        pair<char, char> left = make_pair(move.first-1, move.second+p);
+        pair<char, char> right = make_pair(move.first+1, move.second+p);
+        if (board->count(left) != 0 && (*board)[left]->getColor() != color) moves.push_back(left);
+        if (board->count(right) != 0 && (*board)[right]->getColor() != color) moves.push_back(right);
 
         return moves;
     }
@@ -324,17 +321,18 @@ public:
         if (en_passant.second != -1 && move == en_passant) {
             en_passant.first = 'z';
             en_passant.second = -1;
-            en_pawn.~Piece();
-        }
-        if ((int)location.second-(int)move.second == 2) {
-            if ()
-        }
-        if (board) {
-            (*board)[move] = (*board)[location];
-            (*board).erase(location);
-            location = move;
+            en_pawn->setLocation(make_pair('z', 'z'));
         }
 
+        if ((int)location.second-(int)move.second == 2) {
+            pair<char, char> left = make_pair(move.first-1, move.second);
+            pair<char, char> right = make_pair(move.first+1, move.second);
+            if (board->count(left) != 0 && (*board)[left]->getType() == PAWN && (*board)[left]->getColor() != color) (*board)[pos]->setEnPassant(make_pair(move.first, move.second-(-1*((int)direction-1))), this);
+            if (board->count(right) != 0 && (*board)[right]->getType() == PAWN && (*board)[right]->getColor() != color) (*board)[pos]->setEnPassant(make_pair(move.first, move.second-(-1*((int)direction-1))), this);
+        }
+
+        // Make move
+        moveHelper(move);
         if (!has_moved) has_moved = true; 
     }
 
@@ -363,7 +361,8 @@ public:
             if (file >= 'a' && file <= 'h' && rank >= 1 && rank <= 8) {
                 auto pos = make_pair(file, rank);
                 // Check if move is valid (not in danger, not blocked by same-side piece)
-                if (!danger[file - 'a'][rank - 1] && (!board->count(pos) ||
+                if (!danger[file - 'a'][rank - 1] && 
+                    (!board->count(pos) ||
                     (*board)[pos]->getColor() != color)) {
                     moves.push_back(file, rank);
                 }
